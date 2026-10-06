@@ -1,6 +1,11 @@
-import json
-import os
 import wikipediaapi
+import os, json
+from dotenv import load_dotenv
+import requests
+
+load_dotenv()
+
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
 # Initialize the Wikipedia API client with a required, custom User-Agent
 wiki = wikipediaapi.Wikipedia(
@@ -45,3 +50,19 @@ if page_full.exists():
         json.dump(page_data, file, ensure_ascii=False, indent=4)
         
     print("\nSuccessfully saved page data to response.json")
+    
+params = {
+
+    "api_key": SERPAPI_API_KEY,
+
+    "engine": "duckduckgo",
+
+    "q": "what is python"
+
+}
+
+search = requests.get("https://serpapi.com/search", params=params)
+
+response = search.json()
+print("#######################")
+print(json.dumps(response, indent=4)) 
