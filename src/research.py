@@ -9,67 +9,96 @@ load_dotenv()
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
 
-# 1. Network & Data Fetching Layer
-def fetch_wikipedia_data(topic):
+# 1. Infrastructure Layer (File Storage)
+class FileHandler:
     """
-    Pure Network Function: Fetches an introduction summary and full text 
-    payload from Wikipedia. Does NOT save files.
+    Blueprint responsible strictly for low-level file system 
+    interactions like writing and serializing data.
     """
-    wiki = wikipediaapi.Wikipedia(
-        user_agent="ChrisResearchAssistant/1.0 (chris@example.com)",
-        language="en"
-    )
-    
-    page = wiki.page(topic)
-    if not page.exists():
-        print(f"Error: Wikipedia page '{topic}' does not exist.")
-        return None
+    def save_json(self, data, file_path):
+        """Serializes and writes a Python dictionary to a JSON file."""
+        if not data:
+            print(f"[FileHandler Warning] No data provided to save for {file_path}")
+            return
 
-    # Structure and return the extracted data dictionary
-    return {
-        "title": page.title,
-        "url": page.fullurl,
-        "summary": page.summary,
-        "text": page.text
-    }
+        # Automatically extract and create the base folder structure if missing
+        dir_name = os.path.dirname(file_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def fetch_web_search(query):
+# 2. Service Layer (Data Orchestration)
+class ResearchEngine:
     """
-    Queries SerpAPI using the DuckDuckGo engine and prints the JSON response.
+    Blueprint responsible for orchestrating web data collection
+    and using a FileHandler to cache the results.
     """
-    
-    params = {
-        "api_key": SERPAPI_API_KEY,
-        "engine": "duckduckgo",
-        "q": query
-    }
+    def __init__(self):
+        # Composition: We inject and instantiate the FileHandler inside our engine
+        self.file_handler = FileHandler()
+        self.serp_api_key = SERPAPI_API_KEY
 
-    try:
-        search = requests.get("https://serpapi.com/search", params=params)
-        return search.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Network request failed: {e}")
-        return None
+    def fetch_wikipedia_data(self, topic):
+        """
+        Pure Network Function: Fetches an introduction summary and full text 
+        payload from Wikipedia. Does NOT save files.
+        """
+        wiki = wikipediaapi.Wikipedia(
+            user_agent="ChrisResearchAssistant/1.0 (chris@example.com)",
+            language="en"
+        )
+        
+        page = wiki.page(topic)
+        if not page.exists():
+            print(f"Error: Wikipedia page '{topic}' does not exist.")
+            return None
 
+        # Structure and return the extracted data dictionary
+        return {
+            "title": page.title,
+            "url": page.fullurl,
+            "summary": page.summary,
+            "text": page.text
+        }
 
-# 2. Local Data Persistence Layer
-def save_json(data, file_path):
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    def fetch_web_search(self, query):
+        """
+        Queries SerpAPI using the DuckDuckGo engine and prints the JSON response.
+        """
+        params = {
+            "api_key": self.serp_api_key,
+            "engine": "duckduckgo",
+            "q": query
+        }
+
+        try:
+            search = requests.get("https://serpapi.com/search", params=params)
+            return search.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Network request failed: {e}")
+            return None
 
 
 # Execution Entry Point
-
 if __name__ == "__main__":
-    directory="data"
-    os.makedirs(directory, exist_ok=True)
-    wiki_file_path = os.path.join(directory, "wiki_response.json")
-    search_file_path = os.path.join(directory, "search_response.json")
+    # 1. Initialize our service engine
+    engine = ResearchEngine()
     
-    # 1. Fetch data from web sources
-    page = fetch_wikipedia_data("Python (programming language)")
-    search = fetch_web_search("what is python")
-    save_json(page, wiki_file_path)
-    save_json(search, search_file_path)
+    # 2. Define explicit, clean data persistence paths
+    wiki_file_path = "data/wiki_response.json"
+    search_file_path = "data/search_response.json"
+    
+    
+    # 3. Fetch data across network protocols using the engine
+    page_data = engine.fetch_wikipedia_data("Python (programming language)")
+    search_data = engine.fetch_web_search("what is python")
+    
+    # 4. Route the payloads explicitly to the internal file handler tool
+    engine.file_handler.save_json(page_data, wiki_file_path)
+    engine.file_handler.save_json(search_data, search_file_path)
+    
+    print("\n=== Pipeline Execution Completed Successfully ===")
 
